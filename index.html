@@ -65,13 +65,13 @@
         card.innerHTML = `
             <button class="delete-btn" onclick="removeCard(${id})">[Löschen]</button>
             <div class="path-row">
-                <div style="flex:2"><label>Parent (z.B. PKM.Bujo)</label><input type="text" id="parent-${id}" placeholder="10.1" oninput="update(${id})"></div>
+                <div style="flex:2"><label>Parent (z.B. 10.1)</label><input type="text" id="parent-${id}" placeholder="10.1" oninput="update(${id})"></div>
                 <div style="flex:1"><label>Kürzel (ID)</label><input type="text" id="kürzel-${id}" placeholder="a" oninput="update(${id})"></div>
             </div>
 
             <div style="margin-bottom:15px">
                 <label>Zitat / Roh-Inhalt</label>
-                <textarea id="quote-${id}" placeholder="Inhalt einfügen..."></textarea>
+                <textarea id="quote-${id}" placeholder="Inhalt hier einfügen..."></textarea>
                 <button class="ai-btn" onclick="runAI(${id})">✨ KI: ID & Titel vorschlagen</button>
             </div>
 
@@ -97,20 +97,25 @@
         update(id);
     }
 
-    function removeCard(id) { document.getElementById(`card-${id}`).remove(); updateAll(); }
+    function removeCard(id) { 
+        const card = document.getElementById(`card-${id}`);
+        if(card) card.remove(); 
+        updateAll(); 
+    }
 
     function update(id) {
         const parent = document.getElementById(`parent-${id}`).value.trim();
         let kürzel = document.getElementById(`kürzel-${id}`).value.trim().replace(/[^a-zA-Z0-9.]/g, '');
         const title = document.getElementById(`title-${id}`).value.trim();
         
-        // Dateiname = Vollständiger Pfad
         const fullFn = parent ? `${parent}.${kürzel}` : kürzel;
         const card = document.getElementById(`card-${id}`);
+        if(!card) return;
+
         card.setAttribute('data-filename', fullFn);
         card.setAttribute('data-kürzel', kürzel);
         
-        // Structured Tree Logik: Nur Kürzel - Titel (ohne Parent im Titel-Feld)
+        // Structured Tree Logik: Kürzel - Titel
         const display = title ? `${kürzel} - ${title}` : kürzel;
         document.getElementById(`preview-${id}`).innerText = `Baum-Anzeige: ${display}`;
         
@@ -122,6 +127,8 @@
         cards.forEach(card => {
             const cId = card.id.replace('card-', '');
             const pills = document.getElementById(`pills-${cId}`);
+            if(!pills) return;
+
             pills.innerHTML = "<label>Quick-Link:</label>";
             
             cards.forEach(other => {
@@ -133,7 +140,10 @@
                     const span = document.createElement('span');
                     span.className = 'link-pill';
                     span.innerText = `[[${oFn}|${oTitle}]]`;
-                    span.onclick = () => document.getElementById(`note-${cId}`).value += ` ${span.innerText} `;
+                    span.onclick = () => {
+                        const note = document.getElementById(`note-${cId}`);
+                        note.value += ` ${span.innerText} `;
+                    };
                     pills.appendChild(span);
                 }
             });
@@ -141,33 +151,66 @@
     }
 
     async function runAI(id) {
-        const key = document.getElementById('apiKey').value;
+        // HIER IST DIE WICHTIGE KORREKTUR FÜR GITHUB PAGES (trim())
+        const keyField = document.getElementById('apiKey');
+        const key = keyField ? keyField.value.trim() : "";
         const text = document.getElementById(`quote-${id}`).value;
-        if(!key || !text) return alert("Key und Zitat benötigt!");
+        
+        if(!key || !text) {
+            alert("Bitte OpenAI API-Key oben eingeben und Zitat in die Karte einfügen!");
+            return;
+        }
+
         const btn = document.querySelector(`#card-${id} .ai-btn`);
-        btn.innerText = "⚡...";
+        const originalText = btn.innerText;
+        btn.innerText = "⚡ KI analysiert...";
+        btn.disabled = true;
+
         try {
             const response = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'Authorization': `Bearer ${key}` 
+                },
                 body: JSON.stringify({
                     model: "gpt-4o-mini",
-                    messages: [{role: "system", content: "Gib JSON: {\"k\": \"Kürzel\", \"t\": \"Titel\", \"s\": \"1Satz\"}. Kürzel=1Wort/CamelCase."}, {role: "user", content: text}]
+                    messages: [
+                        {role: "system", content: "Antworte NUR mit validem JSON: {\"k\": \"Kürzel\", \"t\": \"Titel\", \"s\": \"EinSatz\"}. Kürzel=1 Wort/CamelCase."}, 
+                        {role: "user", content: text}
+                    ],
+                    temperature: 0.7
                 })
             });
+
             const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error ? data.error.message : "API Fehler " + response.status);
+            }
+
             const res = JSON.parse(data.choices[0].message.content);
             document.getElementById(`kürzel-${id}`).value = res.k;
             document.getElementById(`title-${id}`).value = res.t;
             document.getElementById(`summary-${id}`).value = res.s;
             update(id);
-        } catch (e) { alert("KI Fehler"); }
-        btn.innerText = "✨ KI: ID & Titel vorschlagen";
+            
+        } catch (e) { 
+            console.error("AI Error:", e);
+            alert("KI Fehler: " + e.message); 
+        } finally {
+            btn.innerText = originalText;
+            btn.disabled = false;
+        }
     }
 
     async function exportZip() {
         const zip = new JSZip();
-        document.querySelectorAll('.zettel-card').forEach(card => {
+        const cards = document.querySelectorAll('.zettel-card');
+        
+        if(cards.length === 0) return alert("Keine Zettel zum Exportieren vorhanden!");
+
+        cards.forEach(card => {
             const id = card.id.replace('card-', '');
             const fn = card.getAttribute('data-filename');
             const kürzel = card.getAttribute('data-kürzel');
@@ -178,6 +221,7 @@
             const note = document.getElementById(`note-${id}`).value;
             const quote = document.getElementById(`quote-${id}`).value;
 
+            // Structured Tree Format für das title-Feld
             const yamlTitle = `${kürzel} - ${title}`;
 
             const content = `---
@@ -200,11 +244,15 @@ ${quote}`;
 
             zip.file(`${fn}.md`, content);
         });
+
         const blob = await zip.generateAsync({type:"blob"});
-        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); 
-        a.download = `Zettel_Export_${new Date().toISOString().split('T')[0]}.zip`; a.click();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `Zettelkasten_${new Date().toISOString().split('T')[0]}.zip`;
+        a.click();
     }
 
+    // Ersten Zettel automatisch laden
     addZettel();
 </script>
 </body>
