@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zettel-Workbench v6.1 (Structured Tree)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        :root {
+            --bg: #111110; --surface: #1c1c1a; --border: #2c2c29;
+            --accent: #c4b48e; --ink: #e6e4dc; --ink-dim: #4e4c46;
+            --mono: 'JetBrains Mono', monospace;
+        }
+        body { font-family: 'Lora', serif; background: var(--bg); color: var(--ink); padding: 20px; line-height: 1.6; padding-bottom: 120px; }
+        .container { max-width: 1000px; margin: 0 auto; }
+        h1 { font-family: var(--mono); font-size: 1.1rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+        
+        .api-config { background: #1a1a15; border: 1px dashed var(--border); padding: 15px; border-radius: 8px; margin-bottom: 25px; }
+        
+        .zettel-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 30px; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.4); }
+        .path-row { display: flex; gap: 10px; margin-bottom: 20px; background: #161614; padding: 15px; border-radius: 6px; border: 1px solid #222; }
+        
+        label { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; color: var(--ink-dim); display: block; margin-bottom: 5px; font-weight: bold; }
+        input, textarea { width: 100%; background: #000; border: 1px solid var(--border); color: var(--ink); padding: 10px; border-radius: 4px; font-family: inherit; font-size: 0.92rem; box-sizing: border-box;}
+        
+        .ai-btn { background: #2d2d2a; color: var(--accent); border: 1px solid var(--accent); padding: 6px 12px; font-size: 0.7rem; cursor: pointer; border-radius: 4px; margin-top: 10px; font-family: var(--mono); transition: 0.2s; }
+        .ai-btn:hover { background: var(--accent); color: #000; }
+
+        .tree-preview { font-family: var(--mono); font-size: 0.72rem; color: var(--accent); margin-top: 12px; padding: 8px; background: #000; border-radius: 4px; border-left: 3px solid var(--accent); }
+        .link-pill { cursor: pointer; background: var(--border); padding: 4px 10px; border-radius: 4px; margin-right: 8px; display: inline-block; margin-bottom: 8px; color: var(--accent); font-family: var(--mono); font-size: 0.75rem; border: 1px solid transparent; }
+        .link-pill:hover { border-color: var(--accent); background: #111; }
+
+        .actions { position: sticky; bottom: 20px; display: flex; gap: 15px; background: rgba(17,17,16,0.95); padding: 20px; border-top: 1px solid var(--border); justify-content: center; backdrop-filter: blur(10px); z-index: 100; border-radius: 12px; }
+        button.primary { background: var(--accent); color: #000; border: none; padding: 12px 28px; border-radius: 5px; font-family: var(--mono); font-weight: bold; cursor: pointer; box-shadow: 0 4px 14px rgba(196, 180, 142, 0.2); }
+        .delete-btn { color: #9e5a52; background: none; font-size: 0.65rem; border: none; cursor: pointer; position: absolute; top: 12px; right: 12px; font-family: var(--mono); opacity: 0.6; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Zettel-Workbench v6.1</h1>
+
+    <div class="api-config">
+        <label>OpenAI API Key (Lokal)</label>
+        <input type="password" id="apiKey" placeholder="sk-..." style="max-width: 400px;">
+    </div>
+    
+    <div id="workbench"></div>
+
+    <div class="actions">
+        <button class="primary" onclick="addZettel()">+ Neuen Zettel</button>
+        <button style="background:none; border:1px solid var(--accent); color:var(--accent); padding:12px 28px; border-radius:5px; cursor:pointer; font-family: var(--mono); font-weight:bold;" onclick="exportZip()">📦 ZIP Download</button>
+    </div>
+</div>
+
+<script>
+    let zettelCount = 0;
+
+    function addZettel() {
+        zettelCount++;
+        const id = Date.now();
+        const card = document.createElement('div');
+        card.className = 'zettel-card';
+        card.id = `card-${id}`;
+        card.innerHTML = `
+            <button class="delete-btn" onclick="removeCard(${id})">[Löschen]</button>
+            <div class="path-row">
+                <div style="flex:2"><label>Parent (z.B. PKM.Bujo)</label><input type="text" id="parent-${id}" placeholder="10.1" oninput="update(${id})"></div>
+                <div style="flex:1"><label>Kürzel (ID)</label><input type="text" id="kürzel-${id}" placeholder="a" oninput="update(${id})"></div>
+            </div>
+
+            <div style="margin-bottom:15px">
+                <label>Zitat / Roh-Inhalt</label>
+                <textarea id="quote-${id}" placeholder="Inhalt einfügen..."></textarea>
+                <button class="ai-btn" onclick="runAI(${id})">✨ KI: ID & Titel vorschlagen</button>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px">
+                <div style="grid-column: span 2">
+                    <label>Aussagekräftiger Titel</label>
+                    <input type="text" id="title-${id}" placeholder="Titel..." oninput="update(${id})">
+                </div>
+                <div style="grid-column: span 2">
+                    <label>Kurz-Zusammenfassung</label>
+                    <input type="text" id="summary-${id}" placeholder="Essenz..." oninput="update(${id})">
+                </div>
+                <div style="grid-column: span 2">
+                    <label>Eigene Anmerkung</label>
+                    <textarea id="note-${id}"></textarea>
+                </div>
+            </div>
+
+            <div id="preview-${id}" class="tree-preview"></div>
+            <div id="pills-${id}" style="margin-top:15px"></div>
+        `;
+        document.getElementById('workbench').appendChild(card);
+        update(id);
+    }
+
+    function removeCard(id) { document.getElementById(`card-${id}`).remove(); updateAll(); }
+
+    function update(id) {
+        const parent = document.getElementById(`parent-${id}`).value.trim();
+        let kürzel = document.getElementById(`kürzel-${id}`).value.trim().replace(/[^a-zA-Z0-9.]/g, '');
+        const title = document.getElementById(`title-${id}`).value.trim();
+        
+        // Dateiname = Vollständiger Pfad
+        const fullFn = parent ? `${parent}.${kürzel}` : kürzel;
+        const card = document.getElementById(`card-${id}`);
+        card.setAttribute('data-filename', fullFn);
+        card.setAttribute('data-kürzel', kürzel);
+        
+        // Structured Tree Logik: Nur Kürzel - Titel (ohne Parent im Titel-Feld)
+        const display = title ? `${kürzel} - ${title}` : kürzel;
+        document.getElementById(`preview-${id}`).innerText = `Baum-Anzeige: ${display}`;
+        
+        updateAll();
+    }
+
+    function updateAll() {
+        const cards = document.querySelectorAll('.zettel-card');
+        cards.forEach(card => {
+            const cId = card.id.replace('card-', '');
+            const pills = document.getElementById(`pills-${cId}`);
+            pills.innerHTML = "<label>Quick-Link:</label>";
+            
+            cards.forEach(other => {
+                const oId = other.id.replace('card-', '');
+                if(cId === oId) return;
+                const oFn = other.getAttribute('data-filename');
+                const oTitle = document.getElementById(`title-${oId}`).value || "Zettel";
+                if(oFn && oFn !== '') {
+                    const span = document.createElement('span');
+                    span.className = 'link-pill';
+                    span.innerText = `[[${oFn}|${oTitle}]]`;
+                    span.onclick = () => document.getElementById(`note-${cId}`).value += ` ${span.innerText} `;
+                    pills.appendChild(span);
+                }
+            });
+        });
+    }
+
+    async function runAI(id) {
+        const key = document.getElementById('apiKey').value;
+        const text = document.getElementById(`quote-${id}`).value;
+        if(!key || !text) return alert("Key und Zitat benötigt!");
+        const btn = document.querySelector(`#card-${id} .ai-btn`);
+        btn.innerText = "⚡...";
+        try {
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+                body: JSON.stringify({
+                    model: "gpt-4o-mini",
+                    messages: [{role: "system", content: "Gib JSON: {\"k\": \"Kürzel\", \"t\": \"Titel\", \"s\": \"1Satz\"}. Kürzel=1Wort/CamelCase."}, {role: "user", content: text}]
+                })
+            });
+            const data = await response.json();
+            const res = JSON.parse(data.choices[0].message.content);
+            document.getElementById(`kürzel-${id}`).value = res.k;
+            document.getElementById(`title-${id}`).value = res.t;
+            document.getElementById(`summary-${id}`).value = res.s;
+            update(id);
+        } catch (e) { alert("KI Fehler"); }
+        btn.innerText = "✨ KI: ID & Titel vorschlagen";
+    }
+
+    async function exportZip() {
+        const zip = new JSZip();
+        document.querySelectorAll('.zettel-card').forEach(card => {
+            const id = card.id.replace('card-', '');
+            const fn = card.getAttribute('data-filename');
+            const kürzel = card.getAttribute('data-kürzel');
+            if(!fn) return;
+
+            const title = document.getElementById(`title-${id}`).value || "Unbenannt";
+            const summary = document.getElementById(`summary-${id}`).value;
+            const note = document.getElementById(`note-${id}`).value;
+            const quote = document.getElementById(`quote-${id}`).value;
+
+            const yamlTitle = `${kürzel} - ${title}`;
+
+            const content = `---
+title: "${yamlTitle}"
+aliases: ["${title}"]
+type: zettel
+created: ${new Date().toISOString()}
+---
+
+# ${title}
+
+> [!abstract] Zusammenfassung
+> ${summary}
+
+## 📝 Anmerkung
+${note}
+
+## 📖 Quelle
+${quote}`;
+
+            zip.file(`${fn}.md`, content);
+        });
+        const blob = await zip.generateAsync({type:"blob"});
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); 
+        a.download = `Zettel_Export_${new Date().toISOString().split('T')[0]}.zip`; a.click();
+    }
+
+    addZettel();
+</script>
+</body>
+</html>
