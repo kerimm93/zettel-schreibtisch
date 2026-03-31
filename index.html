@@ -286,17 +286,69 @@ async function mergeFromGist() {
     const token = document.getElementById('githubToken').value.trim();
     const gistId = document.getElementById('gistId').value.trim();
     if (!token || !gistId) return alert("Token/ID fehlt!");
+
     try {
-        const res = await fetch(`https://api.github.com/gists/${gistId}`, { headers: { 'Authorization': `token ${token}` } });
+        const res = await fetch(`https://api.github.com/gists/${gistId}`, { 
+            headers: { 'Authorization': `token ${token}` } 
+        });
         const data = await res.json();
+        
+        if (!data.files || !data.files["zettel_sync.json"]) {
+            return alert("Keine Sync-Datei im Gist gefunden.");
+        }
+
         const remote = JSON.parse(data.files["zettel_sync.json"].content);
-        const localPaths = Array.from(document.querySelectorAll('.zettel-card')).map(c => c.getAttribute('data-filename'));
+        
+        // Map der lokalen Zettel erstellen (Path -> ID)
+        const localCards = {};
+        document.querySelectorAll('.zettel-card').forEach(card => {
+            const id = card.id.replace('card-', '');
+            const path = card.getAttribute('data-filename');
+            localCards[path] = id;
+        });
+
+        let added = 0;
+        let updated = 0;
+
         remote.forEach(c => {
             const path = c.parent ? `${c.parent}.${c.kuerzel}` : c.kuerzel;
-            if (!localPaths.includes(path)) renderCard(c);
+            
+            if (localCards[path]) {
+                const id = localCards[path];
+                const localQuote = document.getElementById(`quote-${id}`).value.trim();
+                const remoteQuote = (c.quote || "").trim();
+                
+                // Falls der lokale Zettel noch leer ist -> mit Cloud-Daten füllen
+                if (localQuote === "") {
+                    document.getElementById(`parent-${id}`).value = c.parent || "";
+                    document.getElementById(`kürzel-${id}`).value = c.kuerzel || "";
+                    document.getElementById(`title-${id}`).value = c.title || "";
+                    document.getElementById(`quote-${id}`).value = c.quote || "";
+                    document.getElementById(`note-${id}`).value = c.note || "";
+                    document.getElementById(`summary-${id}`).value = c.summary || "";
+                    update(id);
+                    updated++;
+                } 
+                // Falls Inhalt unterschiedlich -> als Kopie anlegen, um nichts zu überschreiben
+                else if (localQuote !== remoteQuote) {
+                    const copy = {...c};
+                    copy.kuerzel = c.kuerzel + "_cloud";
+                    renderCard(copy);
+                    added++;
+                }
+                // Falls Inhalt identisch -> Dublette verhindern, einfach ignorieren.
+            } else {
+                // Zettel existiert lokal noch gar nicht -> neu anlegen
+                renderCard({p:c.parent, k:c.kuerzel, t:c.title, q:c.quote, n:c.note, s:c.summary});
+                added++;
+            }
         });
-        alert("🌿 Merge fertig.");
-    } catch (e) { alert("Merge Fehler"); }
+
+        alert(`🌿 Merge beendet: ${added} neue Zettel, ${updated} befüllt.`);
+    } catch (e) { 
+        console.error(e);
+        alert("Merge Fehler: " + e.message); 
+    }
 }
 
 function clearWorkbench() {
