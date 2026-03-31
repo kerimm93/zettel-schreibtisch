@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Zettel-Workbench v8.4 (Loop Fix)</title>
+    <title>Zettel-Workbench v8.5 (Stability Update)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         :root {
@@ -35,7 +35,7 @@
 <body>
 
 <div class="container">
-    <h1>Zettel-Workbench v8.4</h1>
+    <h1>Zettel-Workbench v8.5</h1>
     <div class="api-config">
         <div class="config-grid">
             <div><label>OpenAI Key</label><input type="password" id="apiKey" onchange="saveConfig()"></div>
@@ -195,11 +195,22 @@ async function mergeFromGist() {
     isMerging = true;
     const token = document.getElementById('githubToken').value.trim();
     const gistId = document.getElementById('gistId').value.trim();
-    if (!token || !gistId) { isMerging = false; return alert("Daten fehlen!"); }
+    if (!token || !gistId) { isMerging = false; return alert("GitHub Daten fehlen!"); }
+    
     try {
-        const res = await fetch(`https://api.github.com/gists/${gistId}`, { headers: { 'Authorization': `token ${token}` } });
+        const res = await fetch(`https://api.github.com/gists/${gistId}`, { 
+            headers: { 'Authorization': `token ${token}`, 'Cache-Control': 'no-cache' } 
+        });
+        
+        if (!res.ok) throw new Error(`GitHub-Server Fehler (Status ${res.status})`);
+
         const data = await res.json();
-        const remote = JSON.parse(data.files["zettel_sync.json"].content);
+        const file = data.files["zettel_sync.json"];
+        if (!file || !file.content) throw new Error("Cloud-Datei nicht gefunden oder leer.");
+
+        let remote;
+        try { remote = JSON.parse(file.content); } 
+        catch (e) { throw new Error("Daten in der Cloud sind kein gültiges JSON."); }
         
         const localDataMap = {};
         document.querySelectorAll('.zettel-card').forEach(card => {
@@ -207,13 +218,14 @@ async function mergeFromGist() {
             const path = card.getAttribute('data-filename');
             localDataMap[path] = {
                 id: id,
-                q: document.getElementById(`quote-${id}`).value.trim(),
-                t: document.getElementById(`title-${id}`).value.trim(),
-                n: document.getElementById(`note-${id}`).value.trim(),
-                s: document.getElementById(`summary-${id}`).value.trim()
+                q: (document.getElementById(`quote-${id}`).value || "").trim(),
+                t: (document.getElementById(`title-${id}`).value || "").trim(),
+                n: (document.getElementById(`note-${id}`).value || "").trim(),
+                s: (document.getElementById(`summary-${id}`).value || "").trim()
             };
         });
 
+        let added = 0, updated = 0;
         remote.forEach(c => {
             const rPath = (c.p || c.parent ? `${c.p || c.parent}.${c.k || c.kuerzel}` : (c.k || c.kuerzel)).toLowerCase();
             const rQ = (c.q || c.quote || "").trim();
@@ -226,19 +238,19 @@ async function mergeFromGist() {
                 const isIdentical = (l.q === rQ && l.t === rT && l.n === rN && l.s === rS);
                 if (!isIdentical) {
                     if (l.q === "" && l.t === "") {
-                        renderCard(c); // Befüllen falls lokal leer
+                        renderCard(c); updated++;
                     } else {
                         const copy = {...c}; 
                         copy.k = (c.k || c.kuerzel) + "_conflict"; 
-                        renderCard(copy);
+                        renderCard(copy); added++;
                     }
                 }
-            } else {
-                renderCard(c);
-            }
+            } else { renderCard(c); added++; }
         });
-        alert("🌿 Merge abgeschlossen.");
-    } catch (e) { alert("Fehler"); }
+        alert(`🌿 Merge Erfolg: ${added} neu/Konflikte, ${updated} befüllt.`);
+    } catch (e) { 
+        alert(`⚠️ Merge Fehler: ${e.message}`); 
+    }
     isMerging = false;
     autoSaveLocal();
 }
@@ -247,13 +259,14 @@ async function saveToGist() {
     const token = document.getElementById('githubToken').value.trim();
     const gistId = document.getElementById('gistId').value.trim();
     try {
-        await fetch(`https://api.github.com/gists/${gistId}`, {
+        const res = await fetch(`https://api.github.com/gists/${gistId}`, {
             method: 'PATCH',
             headers: { 'Authorization': `token ${token}` },
             body: JSON.stringify({ files: { "zettel_sync.json": { content: JSON.stringify(collectData()) } } })
         });
-        alert("✅ Gespeichert!");
-    } catch (e) { alert("Fehler"); }
+        if (res.ok) alert("✅ Cloud Save OK!");
+        else alert("Save Fehler: " + res.status);
+    } catch (e) { alert("Fehler: " + e.message); }
 }
 
 function confirmLoadFromGist() { if(confirm("Überschreibt ALLES lokal. Wirklich?")) loadFromGist(); }
@@ -266,7 +279,7 @@ async function loadFromGist() {
         const content = JSON.parse(data.files["zettel_sync.json"].content);
         document.getElementById('workbench').innerHTML = "";
         content.forEach(c => renderCard(c));
-    } catch (e) { alert("Fehler"); }
+    } catch (e) { alert("Fehler: " + e.message); }
 }
 
 async function runAI(id) {
@@ -297,7 +310,7 @@ async function exportZip() {
         if(!fn) return;
         const t = document.getElementById(`title-${id}`).value || "Unbenannt";
         const content = `---\ntitle: "${t}"\ntype: zettel\n---\n# ${t}\n\n> [!abstract] Zusammenfassung\n> ${document.getElementById(`summary-${id}`).value}\n\n## 📝 Anmerkung\n${document.getElementById(`note-${id}`).value}\n\n## 📖 Quelle\n${document.getElementById(`quote-${id}`).value}`;
-    zip.file(`${fn}.md`, content);
+        zip.file(`${fn}.md`, content);
     });
     const blob = await zip.generateAsync({type:"blob"});
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Export.zip`; a.click();
