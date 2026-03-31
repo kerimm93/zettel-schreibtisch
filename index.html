@@ -38,7 +38,6 @@
     </style>
 </head>
 <body>
-
 <div class="container">
     <h1>Zettel-Workbench v8.5</h1>
     <div class="api-config">
@@ -62,10 +61,22 @@
         <button style="background:none; border:1px solid var(--accent); color:var(--accent); padding:12px 20px; border-radius:5px; cursor:pointer; font-family: var(--mono);" onclick="exportZip()">📦 ZIP Export</button>
     </div>
 </div>
-
 <script>
 let isMerging = false;
 const GIST_FILENAME = "zettel_sync.json";
+
+// ── Standard-Headers für alle GitHub-API-Requests ──────────────────────────
+// PATCH/POST brauchen zwingend Content-Type: application/json.
+// Cache-Control wurde aus dem GET entfernt – es ist kein CORS-safelisted
+// Header und löst einen Preflight-OPTIONS aus, der im PWA-Kontext scheitert.
+function githubHeaders(token, includeContentType = false) {
+    const h = {
+        'Authorization': `token ${token}`,
+        'Accept': 'application/vnd.github+json'
+    };
+    if (includeContentType) h['Content-Type'] = 'application/json';
+    return h;
+}
 
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
@@ -74,7 +85,6 @@ if ('serviceWorker' in navigator) {
         });
     });
 }
-
 function saveConfig() {
     localStorage.setItem('zw_config', JSON.stringify({
         ai: document.getElementById('apiKey').value,
@@ -82,7 +92,6 @@ function saveConfig() {
         gi: document.getElementById('gistId').value
     }));
 }
-
 function loadConfig() {
     const cfg = JSON.parse(localStorage.getItem('zw_config'));
     if(cfg) {
@@ -91,7 +100,6 @@ function loadConfig() {
         document.getElementById('gistId').value = cfg.gi || "";
     }
 }
-
 function addZettel() {
     const id = Date.now() + Math.floor(Math.random() * 1000);
     const card = document.createElement('div');
@@ -121,11 +129,9 @@ function addZettel() {
     update(id);
     return id;
 }
-
 function removeCard(id) {
     if(confirm("Löschen?")) { document.getElementById(`card-${id}`).remove(); updateAll(); autoSaveLocal(); }
 }
-
 function update(id) {
     const p = (document.getElementById(`parent-${id}`).value || "").trim();
     const k = (document.getElementById(`kürzel-${id}`).value || "").trim().replace(/[^a-zA-Z0-9.]/g, '');
@@ -139,7 +145,6 @@ function update(id) {
     updateAll(); 
     if(!isMerging) autoSaveLocal();
 }
-
 function updateAll() {
     const cards = document.querySelectorAll('.zettel-card');
     cards.forEach(card => {
@@ -161,7 +166,6 @@ function updateAll() {
         });
     });
 }
-
 function collectData() {
     return Array.from(document.querySelectorAll('.zettel-card')).map(card => {
         const id = card.id.replace('card-', '');
@@ -175,7 +179,6 @@ function collectData() {
         };
     });
 }
-
 function normalizePath(entry) {
     const clean = (value) => (value || "")
         .toString()
@@ -188,17 +191,14 @@ function normalizePath(entry) {
     if (parent && kuerzel) return `${parent}.${kuerzel}`;
     return parent || kuerzel || "";
 }
-
 function normalizeText(value) {
     return (value || "").replace(/\s+/g, " ").trim();
 }
-
 function buildContentSignature(entry) {
     return [entry.q || entry.quote, entry.t || entry.title, entry.n || entry.note, entry.s || entry.summary]
         .map(normalizeText)
         .join("||");
 }
-
 function normalizeEntry(entry) {
     return {
         p: normalizeText(entry.p || entry.parent || ""),
@@ -209,7 +209,6 @@ function normalizeEntry(entry) {
         s: normalizeText(entry.s || entry.summary || "")
     };
 }
-
 function fillCardById(id, data) {
     if (!document.getElementById(`card-${id}`)) return false;
     document.getElementById(`parent-${id}`).value = data.p || "";
@@ -221,7 +220,6 @@ function fillCardById(id, data) {
     update(id);
     return true;
 }
-
 async function fetchWithTimeoutRetry(url, options = {}, retryOptions = {}) {
     const timeoutMs = retryOptions.timeoutMs || 12000;
     const retries = retryOptions.retries || 2;
@@ -246,9 +244,7 @@ async function fetchWithTimeoutRetry(url, options = {}, retryOptions = {}) {
     }
     throw lastError || new Error("Unbekannter Netzwerkfehler");
 }
-
 function autoSaveLocal() { localStorage.setItem('zw_autosave', JSON.stringify(collectData())); }
-
 function loadLocal() {
     const data = JSON.parse(localStorage.getItem('zw_autosave'));
     if(data && data.length > 0) {
@@ -256,7 +252,6 @@ function loadLocal() {
         data.forEach(d => renderCard(d));
     } else { addZettel(); }
 }
-
 function renderCard(d) {
     const allCards = document.querySelectorAll('.zettel-card');
     let targetId;
@@ -275,7 +270,6 @@ function renderCard(d) {
     document.getElementById(`summary-${targetId}`).value = d.s || d.summary || "";
     update(targetId);
 }
-
 async function mergeFromGist() {
     isMerging = true;
     const token = document.getElementById('githubToken').value.trim();
@@ -283,132 +277,182 @@ async function mergeFromGist() {
     if (!token || !gistId) { isMerging = false; return alert("GitHub Daten fehlen!"); }
     
     try {
-        const res = await fetchWithTimeoutRetry(`https://api.github.com/gists/${gistId}`, {
-            headers: { 'Authorization': `token ${token}`, 'Cache-Control': 'no-cache' } 
-        }, { timeoutMs: 15000, retries: 2 });
-        
-        if (!res.ok) throw new Error(`GitHub-Server Fehler (Status ${res.status})`);
+        // ── Schritt 1: Gist-GET ────────────────────────────────────────────
+        // Cache-Control absichtlich weggelassen: nicht CORS-safelisted →
+        // löst Preflight aus, der im PWA-Kontext scheitert ("Failed to fetch").
+        let res;
+        try {
+            res = await fetchWithTimeoutRetry(
+                `https://api.github.com/gists/${gistId}`,
+                { headers: githubHeaders(token) },
+                { timeoutMs: 15000, retries: 2 }
+            );
+        } catch (fetchErr) {
+            console.error('[Merge] Schritt 1 – GET fehlgeschlagen:', fetchErr);
+            throw new Error(`Netzwerkfehler beim Abrufen des Gist: ${fetchErr.message}`);
+        }
 
-        const data = await res.json();
-        const file = data.files[GIST_FILENAME];
-        if (!file || !file.content) throw new Error("Cloud-Datei nicht gefunden oder leer.");
+        if (!res.ok) {
+            console.error('[Merge] Schritt 1 – HTTP-Fehler:', res.status, res.statusText);
+            throw new Error(`GitHub-Server Fehler beim GET (Status ${res.status})`);
+        }
 
-        let remote;
-        try { remote = JSON.parse(file.content); } 
-        catch (e) { throw new Error("Daten in der Cloud sind kein gültiges JSON."); }
-        if (!Array.isArray(remote)) throw new Error("Cloud-Datei hat ein ungültiges Format (Array erwartet).");
-        
-        const localDataMap = {};
-        const localSignatures = new Set();
-        const localBySignature = new Set();
-        document.querySelectorAll('.zettel-card').forEach(card => {
-            const id = card.id.replace('card-', '');
-            const localEntry = normalizeEntry({
-                p: document.getElementById(`parent-${id}`).value,
-                k: document.getElementById(`kürzel-${id}`).value,
-                q: document.getElementById(`quote-${id}`).value,
-                t: document.getElementById(`title-${id}`).value,
-                n: document.getElementById(`note-${id}`).value,
-                s: document.getElementById(`summary-${id}`).value
-            });
-            const path = normalizePath(localEntry);
-            localDataMap[path] = {
-                id: id,
-                ...localEntry
-            };
-            const signature = buildContentSignature(localEntry);
-            localSignatures.add(`${path}::${signature}`);
-            localBySignature.add(signature);
-        });
+        // ── Schritt 2: JSON-Parse ──────────────────────────────────────────
+        let data, remote;
+        try {
+            data = await res.json();
+        } catch (parseErr) {
+            console.error('[Merge] Schritt 2 – Gist-Antwort ist kein JSON:', parseErr);
+            throw new Error("Gist-Antwort konnte nicht als JSON geparst werden.");
+        }
 
-        const seenRemote = new Set();
+        const file = data.files && data.files[GIST_FILENAME];
+        if (!file || !file.content) {
+            console.error('[Merge] Schritt 2 – Datei fehlt im Gist. Vorhandene Dateien:', Object.keys(data.files || {}));
+            throw new Error(`Cloud-Datei "${GIST_FILENAME}" nicht gefunden oder leer.`);
+        }
+
+        try {
+            remote = JSON.parse(file.content);
+        } catch (jsonErr) {
+            console.error('[Merge] Schritt 2 – file.content ist kein gültiges JSON:', jsonErr);
+            throw new Error("Daten in der Cloud sind kein gültiges JSON.");
+        }
+
+        if (!Array.isArray(remote)) {
+            console.error('[Merge] Schritt 2 – remote ist kein Array:', typeof remote);
+            throw new Error("Cloud-Datei hat ein ungültiges Format (Array erwartet).");
+        }
+
+        // ── Schritt 3: Lokaler Merge ───────────────────────────────────────
         let added = 0, updated = 0, skipped = 0;
-        remote.forEach(c => {
-            const normalizedRemote = normalizeEntry(c);
-            const rPath = normalizePath(normalizedRemote);
-            const signature = buildContentSignature(normalizedRemote);
-            const dedupKey = `${rPath}::${signature}`;
-            if (seenRemote.has(dedupKey)) {
-                skipped++;
-                return;
-            }
-            seenRemote.add(dedupKey);
+        try {
+            const localDataMap = {};
+            const localSignatures = new Set();
+            const localBySignature = new Set();
+            document.querySelectorAll('.zettel-card').forEach(card => {
+                const id = card.id.replace('card-', '');
+                const localEntry = normalizeEntry({
+                    p: document.getElementById(`parent-${id}`).value,
+                    k: document.getElementById(`kürzel-${id}`).value,
+                    q: document.getElementById(`quote-${id}`).value,
+                    t: document.getElementById(`title-${id}`).value,
+                    n: document.getElementById(`note-${id}`).value,
+                    s: document.getElementById(`summary-${id}`).value
+                });
+                const path = normalizePath(localEntry);
+                localDataMap[path] = { id: id, ...localEntry };
+                const signature = buildContentSignature(localEntry);
+                localSignatures.add(`${path}::${signature}`);
+                localBySignature.add(signature);
+            });
 
-            if (localDataMap[rPath]) {
-                const l = localDataMap[rPath];
-                const isIdentical = buildContentSignature(l) === signature;
-                if (!isIdentical) {
-                    if (l.q === "" && l.t === "") {
-                        if (fillCardById(l.id, normalizedRemote)) {
-                            updated++;
-                            localDataMap[rPath] = { id: l.id, ...normalizedRemote };
-                            localSignatures.add(`${rPath}::${signature}`);
-                            localBySignature.add(signature);
-                        }
-                    } else {
-                        if (!localSignatures.has(dedupKey) && !localBySignature.has(signature)) {
-                            const copy = { ...normalizedRemote, k: `${normalizedRemote.k || 'zettel'}_conflict` };
-                            renderCard(copy);
-                            added++;
-                            localSignatures.add(`${normalizePath(copy)}::${buildContentSignature(copy)}`);
-                            localBySignature.add(signature);
+            const seenRemote = new Set();
+            remote.forEach(c => {
+                const normalizedRemote = normalizeEntry(c);
+                const rPath = normalizePath(normalizedRemote);
+                const signature = buildContentSignature(normalizedRemote);
+                const dedupKey = `${rPath}::${signature}`;
+                if (seenRemote.has(dedupKey)) { skipped++; return; }
+                seenRemote.add(dedupKey);
+                if (localDataMap[rPath]) {
+                    const l = localDataMap[rPath];
+                    const isIdentical = buildContentSignature(l) === signature;
+                    if (!isIdentical) {
+                        if (l.q === "" && l.t === "") {
+                            if (fillCardById(l.id, normalizedRemote)) {
+                                updated++;
+                                localDataMap[rPath] = { id: l.id, ...normalizedRemote };
+                                localSignatures.add(`${rPath}::${signature}`);
+                                localBySignature.add(signature);
+                            }
                         } else {
-                            skipped++;
+                            if (!localSignatures.has(dedupKey) && !localBySignature.has(signature)) {
+                                const copy = { ...normalizedRemote, k: `${normalizedRemote.k || 'zettel'}_conflict` };
+                                renderCard(copy);
+                                added++;
+                                localSignatures.add(`${normalizePath(copy)}::${buildContentSignature(copy)}`);
+                                localBySignature.add(signature);
+                            } else { skipped++; }
                         }
                     }
-                }
-            } else {
-                if (!localSignatures.has(dedupKey) && !localBySignature.has(signature)) {
-                    renderCard(normalizedRemote);
-                    added++;
-                    localSignatures.add(dedupKey);
-                    localBySignature.add(signature);
                 } else {
-                    skipped++;
+                    if (!localSignatures.has(dedupKey) && !localBySignature.has(signature)) {
+                        renderCard(normalizedRemote);
+                        added++;
+                        localSignatures.add(dedupKey);
+                        localBySignature.add(signature);
+                    } else { skipped++; }
                 }
-            }
-        });
+            });
+        } catch (mergeErr) {
+            console.error('[Merge] Schritt 3 – lokaler Merge-Fehler:', mergeErr);
+            throw new Error(`Fehler beim lokalen Merge: ${mergeErr.message}`);
+        }
 
+        // ── Schritt 4: Gist-PATCH nach Merge ──────────────────────────────
+        // Content-Type: application/json ist für PATCH zwingend erforderlich.
         const mergedContent = JSON.stringify(collectData());
-        const writeRes = await fetchWithTimeoutRetry(`https://api.github.com/gists/${gistId}`, {
-            method: 'PATCH',
-            headers: { 'Authorization': `token ${token}` },
-            body: JSON.stringify({ files: { [GIST_FILENAME]: { content: mergedContent } } })
-        }, { timeoutMs: 15000, retries: 1 });
-        if (!writeRes.ok) throw new Error(`Merge gespeichert, aber Cloud-Write fehlgeschlagen (Status ${writeRes.status}).`);
+        let writeRes;
+        try {
+            writeRes = await fetchWithTimeoutRetry(
+                `https://api.github.com/gists/${gistId}`,
+                {
+                    method: 'PATCH',
+                    headers: githubHeaders(token, true), // ← Content-Type: application/json
+                    body: JSON.stringify({ files: { [GIST_FILENAME]: { content: mergedContent } } })
+                },
+                { timeoutMs: 15000, retries: 1 }
+            );
+        } catch (patchErr) {
+            console.error('[Merge] Schritt 4 – PATCH fehlgeschlagen:', patchErr);
+            throw new Error(`Netzwerkfehler beim Cloud-Schreiben nach Merge: ${patchErr.message}`);
+        }
+
+        if (!writeRes.ok) {
+            console.error('[Merge] Schritt 4 – HTTP-Fehler beim PATCH:', writeRes.status, writeRes.statusText);
+            throw new Error(`Merge lokal OK, aber Cloud-Write fehlgeschlagen (Status ${writeRes.status}).`);
+        }
 
         alert(`🌿 Merge Erfolg: ${added} neu/Konflikte, ${updated} befüllt, ${skipped} Duplikate übersprungen. Cloud wurde konvergiert.`);
-    } catch (e) { 
+
+    } catch (e) {
         const isTimeout = e.name === "AbortError" || e.message === "timeout";
         const message = isTimeout
             ? "Zeitüberschreitung beim Abruf. Bitte Netzwerk prüfen und erneut versuchen."
             : e.message || "Unbekannter Fehler beim Merge.";
-        alert(`⚠️ Merge Fehler: ${message}`); 
+        alert(`⚠️ Merge Fehler: ${message}`);
     }
     isMerging = false;
     autoSaveLocal();
 }
-
 async function saveToGist() {
     const token = document.getElementById('githubToken').value.trim();
     const gistId = document.getElementById('gistId').value.trim();
     try {
-        const res = await fetchWithTimeoutRetry(`https://api.github.com/gists/${gistId}`, {
-            method: 'PATCH',
-            headers: { 'Authorization': `token ${token}` },
-            body: JSON.stringify({ files: { [GIST_FILENAME]: { content: JSON.stringify(collectData()) } } })
-        }, { timeoutMs: 15000, retries: 1 });
+        const res = await fetchWithTimeoutRetry(
+            `https://api.github.com/gists/${gistId}`,
+            {
+                method: 'PATCH',
+                headers: githubHeaders(token, true), // ← Content-Type: application/json
+                body: JSON.stringify({ files: { [GIST_FILENAME]: { content: JSON.stringify(collectData()) } } })
+            },
+            { timeoutMs: 15000, retries: 1 }
+        );
         if (res.ok) alert("✅ Cloud Save OK!");
         else alert("Save Fehler: " + res.status);
     } catch (e) { alert("Fehler: " + e.message); }
 }
-
 function confirmLoadFromGist() { if(confirm("Überschreibt ALLES lokal. Wirklich?")) loadFromGist(); }
 async function loadFromGist() {
     const token = document.getElementById('githubToken').value.trim();
     const gistId = document.getElementById('gistId').value.trim();
     try {
-        const res = await fetchWithTimeoutRetry(`https://api.github.com/gists/${gistId}`, { headers: { 'Authorization': `token ${token}` } }, { timeoutMs: 15000, retries: 1 });
+        const res = await fetchWithTimeoutRetry(
+            `https://api.github.com/gists/${gistId}`,
+            { headers: githubHeaders(token) },
+            { timeoutMs: 15000, retries: 1 }
+        );
         if (!res.ok) throw new Error(`GitHub-Server Fehler (Status ${res.status})`);
         const data = await res.json();
         const file = data.files && data.files[GIST_FILENAME];
@@ -421,7 +465,6 @@ async function loadFromGist() {
         content.forEach(c => renderCard(c));
     } catch (e) { alert("Fehler: " + e.message); }
 }
-
 async function runAI(id) {
     const key = document.getElementById('apiKey').value.trim();
     const text = document.getElementById(`quote-${id}`).value;
@@ -440,9 +483,7 @@ async function runAI(id) {
         update(id);
     } catch (e) { alert("AI Fehler"); }
 }
-
 function clearWorkbench() { if(confirm("Reset?")) { document.getElementById('workbench').innerHTML = ""; localStorage.removeItem('zw_autosave'); addZettel(); } }
-
 async function exportZip() {
     const zip = new JSZip();
     document.querySelectorAll('.zettel-card').forEach(card => {
@@ -455,7 +496,6 @@ async function exportZip() {
     const blob = await zip.generateAsync({type:"blob"});
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Export.zip`; a.click();
 }
-
 loadConfig(); loadLocal();
 </script>
 </body>
