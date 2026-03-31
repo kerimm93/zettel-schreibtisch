@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Zettel-Workbench v8.2 (Data Shield)</title>
+    <title>Zettel-Workbench v8.3 (Final Sync)</title>
     <link rel="manifest" href="manifest.json">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
@@ -16,28 +16,18 @@
         body { font-family: 'Lora', serif; background: var(--bg); color: var(--ink); padding: 15px; line-height: 1.6; padding-bottom: 120px; margin: 0; }
         .container { max-width: 1000px; margin: 0 auto; }
         h1 { font-family: var(--mono); font-size: 1rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
-        
         .api-config { background: #1a1a15; border: 1px dashed var(--border); padding: 15px; border-radius: 8px; margin-bottom: 25px; }
         .config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 15px; }
-        
-        .zettel-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 30px; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.4); transition: border-color 0.3s; }
-        .zettel-card.dirty { border-color: var(--accent); }
-        
+        .zettel-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 30px; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.4); }
         .path-row { display: flex; gap: 10px; margin-bottom: 20px; background: #161614; padding: 15px; border-radius: 6px; border: 1px solid #222; }
-        
         label { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; color: var(--ink-dim); display: block; margin-bottom: 5px; font-weight: bold; }
         input, textarea { width: 100%; background: #000; border: 1px solid var(--border); color: var(--ink); padding: 10px; border-radius: 4px; font-family: inherit; font-size: 0.92rem; box-sizing: border-box;}
-        
         .ai-btn { background: #2d2d2a; color: var(--accent); border: 1px solid var(--accent); padding: 8px 12px; font-size: 0.7rem; cursor: pointer; border-radius: 4px; font-family: var(--mono); transition: 0.2s; }
         .ai-btn:hover { background: var(--accent); color: #000; }
-        
         .btn-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 15px; border-top: 1px solid var(--border); padding-top: 15px; }
         .group { display: flex; gap: 8px; }
-        .backup-row { margin-top: 15px; padding: 10px; background: #111; border-radius: 6px; display: flex; gap: 10px; align-items: center; border: 1px solid #222; }
-
         .tree-preview { font-family: var(--mono); font-size: 0.72rem; color: var(--accent); margin-top: 12px; padding: 8px; background: #000; border-radius: 4px; border-left: 3px solid var(--accent); }
         .link-pill { cursor: pointer; background: var(--border); padding: 4px 10px; border-radius: 4px; margin-right: 8px; display: inline-block; margin-bottom: 8px; color: var(--accent); font-family: var(--mono); font-size: 0.75rem; border: 1px solid transparent;}
-
         .actions { position: sticky; bottom: 15px; display: flex; gap: 10px; background: rgba(17,17,16,0.95); padding: 15px; border-top: 1px solid var(--border); justify-content: center; backdrop-filter: blur(10px); z-index: 100; border-radius: 12px; }
         button.primary { background: var(--accent); color: #000; border: none; padding: 12px 20px; border-radius: 5px; font-family: var(--mono); font-weight: bold; cursor: pointer; font-size: 0.85rem;}
         .delete-btn { color: var(--danger); background: none; font-size: 0.65rem; border: none; cursor: pointer; position: absolute; top: 12px; right: 12px; font-family: var(--mono); opacity: 0.6;}
@@ -48,36 +38,23 @@
 <body>
 
 <div class="container">
-    <h1>Zettel-Workbench v8.2</h1>
-
+    <h1>Zettel-Workbench v8.3</h1>
     <div class="api-config">
         <div class="config-grid">
             <div><label>OpenAI Key</label><input type="password" id="apiKey" onchange="saveConfig()"></div>
             <div><label>GitHub Token</label><input type="password" id="githubToken" onchange="saveConfig()"></div>
             <div><label>Gist ID</label><input type="text" id="gistId" onchange="saveConfig()"></div>
         </div>
-        
         <div class="btn-row">
+            <div class="group"><button class="ai-btn" style="background: #2d3a2d; border-color: var(--safe); color: #a8e6a8;" onclick="mergeFromGist()">🌿 Smart Cloud Merge</button></div>
             <div class="group">
-                <button class="ai-btn" style="background: #2d3a2d; border-color: var(--safe); color: #a8e6a8;" onclick="mergeFromGist()">🌿 Smart Cloud Merge</button>
-            </div>
-            <div class="group">
-                <button class="ai-btn" onclick="saveToGist()">☁️ Cloud Save (Overwrite!)</button>
-                <button class="ai-btn" onclick="confirmLoadFromGist()">🔄 Cloud Load (Overwrite!)</button>
+                <button class="ai-btn" onclick="saveToGist()">☁️ Cloud Save</button>
+                <button class="ai-btn" onclick="confirmLoadFromGist()">🔄 Cloud Load</button>
                 <button class="ai-btn" style="border-color: var(--danger); color: var(--danger);" onclick="clearWorkbench()">🗑️ Reset Desk</button>
             </div>
         </div>
-
-        <div class="backup-row">
-            <label style="margin-bottom:0; margin-right:10px; font-size: 0.6rem;">Lokal-Sicherung:</label>
-            <button class="ai-btn" onclick="exportJSON()">💾 JSON Export</button>
-            <button class="ai-btn" onclick="document.getElementById('importFile').click()">📥 JSON Import</button>
-            <input type="file" id="importFile" accept=".json" onchange="importJSON(event)">
-        </div>
     </div>
-    
     <div id="workbench"></div>
-
     <div class="actions">
         <button class="primary" onclick="addZettel()">+ Neuer Zettel</button>
         <button style="background:none; border:1px solid var(--accent); color:var(--accent); padding:12px 20px; border-radius:5px; cursor:pointer; font-family: var(--mono); font-size: 0.85rem;" onclick="exportZip()">📦 ZIP Export</button>
@@ -137,30 +114,21 @@ function addZettel() {
 function removeCard(id) {
     if(confirm("Diesen Zettel wirklich löschen?")) {
         document.getElementById(`card-${id}`).remove();
-        updateAll();
-        autoSaveLocal();
+        updateAll(); autoSaveLocal();
     }
 }
 
 function update(id) {
-    const p = document.getElementById(`parent-${id}`).value.trim();
-    const k = document.getElementById(`kürzel-${id}`).value.trim().replace(/[^a-zA-Z0-9.]/g, '');
-    const t = document.getElementById(`title-${id}`).value.trim();
+    const p = (document.getElementById(`parent-${id}`).value || "").trim();
+    const k = (document.getElementById(`kürzel-${id}`).value || "").trim().replace(/[^a-zA-Z0-9.]/g, '');
+    const t = (document.getElementById(`title-${id}`).value || "").trim();
     const fn = p ? `${p}.${k}` : k;
-    
     const card = document.getElementById(`card-${id}`);
     if(!card) return;
-    card.setAttribute('data-filename', fn);
-    card.setAttribute('data-kuerzel', k);
+    card.setAttribute('data-filename', fn.toLowerCase());
     document.getElementById(`preview-${id}`).innerText = `Baum: ${t ? k + ' - ' + t : k}`;
-    
-    document.getElementById(`status-${id}`).innerText = "Änderung...";
-    updateAll();
-    autoSaveLocal();
-    setTimeout(() => { 
-        if(document.getElementById(`status-${id}`)) 
-            document.getElementById(`status-${id}`).innerText = "Lokal gesichert"; 
-    }, 1000);
+    updateAll(); autoSaveLocal();
+    document.getElementById(`status-${id}`).innerText = "Lokal gesichert";
 }
 
 function updateAll() {
@@ -199,9 +167,7 @@ function collectData() {
     });
 }
 
-function autoSaveLocal() {
-    localStorage.setItem('zw_autosave', JSON.stringify(collectData()));
-}
+function autoSaveLocal() { localStorage.setItem('zw_autosave', JSON.stringify(collectData())); }
 
 function loadLocal() {
     const data = JSON.parse(localStorage.getItem('zw_autosave'));
@@ -229,7 +195,6 @@ function renderCard(d) {
     update(targetId);
 }
 
-// GIST LOGIK
 async function mergeFromGist() {
     const token = document.getElementById('githubToken').value.trim();
     const gistId = document.getElementById('gistId').value.trim();
@@ -246,32 +211,32 @@ async function mergeFromGist() {
 
         let added = 0, updated = 0;
         remote.forEach(c => {
-            const path = c.parent ? `${c.parent}.${c.kuerzel}` : c.kuerzel;
+            const path = (c.parent ? `${c.parent}.${c.kuerzel}` : c.kuerzel).toLowerCase();
+            
             if (localCards[path]) {
                 const id = localCards[path];
-                // Deep Comparison aller Felder
+                const clean = (val) => (val || "").toString().trim();
+                
                 const isIdentical = 
-                    document.getElementById(`quote-${id}`).value.trim() === (c.quote || "").trim() &&
-                    document.getElementById(`title-${id}`).value.trim() === (c.title || "").trim() &&
-                    document.getElementById(`note-${id}`).value.trim() === (c.note || "").trim() &&
-                    document.getElementById(`summary-${id}`).value.trim() === (c.summary || "").trim();
+                    clean(document.getElementById(`quote-${id}`).value) === clean(c.q || c.quote) &&
+                    clean(document.getElementById(`title-${id}`).value) === clean(c.t || c.title) &&
+                    clean(document.getElementById(`note-${id}`).value) === clean(c.n || c.note) &&
+                    clean(document.getElementById(`summary-${id}`).value) === clean(c.s || c.summary);
 
                 if (!isIdentical) {
-                    // Falls lokal leer, füllen. Sonst Kopie!
-                    if (document.getElementById(`quote-${id}`).value.trim() === "") {
+                    if (clean(document.getElementById(`quote-${id}`).value) === "") {
                         renderCard(c); updated++;
                     } else {
-                        const copy = {...c}; copy.kuerzel += "_cloud_copy"; renderCard(copy); added++;
+                        const copy = {...c}; copy.k = (c.k || c.kuerzel) + "_diff"; renderCard(copy); added++;
                     }
                 }
             } else { renderCard(c); added++; }
         });
-        alert(`🌿 Merge beendet: ${added} neu/Kopien, ${updated} befüllt.`);
-    } catch (e) { alert("Fehler beim Mergen"); }
+        alert(`🌿 Merge: ${added} neu/diff, ${updated} befüllt.`);
+    } catch (e) { alert("Merge Fehler"); }
 }
 
 async function saveToGist() {
-    if(!confirm("Dies überschreibt den Stand in der Cloud komplett mit deinem aktuellen Desk. Fortfahren?")) return;
     const token = document.getElementById('githubToken').value.trim();
     const gistId = document.getElementById('gistId').value.trim();
     try {
@@ -280,14 +245,11 @@ async function saveToGist() {
             headers: { 'Authorization': `token ${token}` },
             body: JSON.stringify({ files: { "zettel_sync.json": { content: JSON.stringify(collectData()) } } })
         });
-        if (res.ok) alert("✅ Cloud überschrieben!");
+        if (res.ok) alert("✅ Cloud OK!");
     } catch (e) { alert("Fehler"); }
 }
 
-function confirmLoadFromGist() {
-    if(confirm("ACHTUNG: Dies löscht alle aktuellen Zettel auf dem Desk und lädt den Stand aus der Cloud. Wirklich?")) loadFromGist();
-}
-
+function confirmLoadFromGist() { if(confirm("Überschreibt ALLES lokal. Fortfahren?")) loadFromGist(); }
 async function loadFromGist() {
     const token = document.getElementById('githubToken').value.trim();
     const gistId = document.getElementById('gistId').value.trim();
@@ -300,37 +262,15 @@ async function loadFromGist() {
     } catch (e) { alert("Fehler"); }
 }
 
-// BACKUP & EXPORT
-function exportJSON() {
-    const data = JSON.stringify(collectData(), null, 2);
-    const blob = new Blob([data], {type: "application/json"});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `Zettel_Backup_${new Date().toISOString().slice(0,10)}.json`;
-    a.click();
-}
-
-function importJSON(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        const data = JSON.parse(e.target.result);
-        if(confirm("Zettel hinzufügen (OK) oder alles ersetzen (Abbrechen)?")) { data.forEach(d => renderCard(d)); } 
-        else { document.getElementById('workbench').innerHTML = ""; data.forEach(d => renderCard(d)); }
-    };
-    reader.readAsText(file);
-}
-
 async function runAI(id) {
     const key = document.getElementById('apiKey').value.trim();
     const text = document.getElementById(`quote-${id}`).value;
-    if(!key || !text) return alert("Key oder Inhalt fehlt!");
+    if(!key || !text) return alert("Key/Inhalt fehlt!");
     try {
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-            body: JSON.stringify({ model: "gpt-4o-mini", messages: [{role: "system", content: "Antworte NUR JSON: {\"k\":\"Kürzel\",\"t\":\"Titel\",\"s\":\"Zusammenfassung\"}"}, {role: "user", content: text}] })
+            body: JSON.stringify({ model: "gpt-4o-mini", messages: [{role: "system", content: "NUR JSON: {\"k\":\"Kürzel\",\"t\":\"Titel\",\"s\":\"Zusammenfassung\"}"}, {role: "user", content: text}] })
         });
         const data = await response.json();
         const res = JSON.parse(data.choices[0].message.content);
@@ -341,29 +281,22 @@ async function runAI(id) {
     } catch (e) { alert("AI Fehler"); }
 }
 
-function clearWorkbench() {
-    if(confirm("Lokal leeren? Cloud bleibt erhalten.")) { 
-        document.getElementById('workbench').innerHTML = ""; 
-        localStorage.removeItem('zw_autosave');
-        addZettel(); 
-    }
-}
+function clearWorkbench() { if(confirm("Reset?")) { document.getElementById('workbench').innerHTML = ""; localStorage.removeItem('zw_autosave'); addZettel(); } }
 
 async function exportZip() {
     const zip = new JSZip();
     document.querySelectorAll('.zettel-card').forEach(card => {
-        const id = card.id.replace('card-', ''), fn = card.getAttribute('data-filename'), k = card.getAttribute('data-kuerzel');
-        if(!fn || fn === "") return;
+        const id = card.id.replace('card-', ''), fn = card.getAttribute('data-filename');
+        if(!fn) return;
         const t = document.getElementById(`title-${id}`).value || "Unbenannt";
-        const content = `---\ntitle: "${k} - ${t}"\naliases: ["${t}"]\ntype: zettel\n---\n# ${t}\n\n> [!abstract] Zusammenfassung\n> ${document.getElementById(`summary-${id}`).value}\n\n## 📝 Anmerkung\n${document.getElementById(`note-${id}`).value}\n\n## 📖 Quelle\n${document.getElementById(`quote-${id}`).value}`;
+        const content = `---\ntitle: "${t}"\ntype: zettel\n---\n# ${t}\n\n> [!abstract] Zusammenfassung\n> ${document.getElementById(`summary-${id}`).value}\n\n## 📝 Anmerkung\n${document.getElementById(`note-${id}`).value}\n\n## 📖 Quelle\n${document.getElementById(`quote-${id}`).value}`;
         zip.file(`${fn}.md`, content);
     });
     const blob = await zip.generateAsync({type:"blob"});
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Zettel_Export_${new Date().toISOString().slice(0,10)}.zip`; a.click();
 }
 
-loadConfig();
-loadLocal();
+loadConfig(); loadLocal();
 </script>
 </body>
 </html>
