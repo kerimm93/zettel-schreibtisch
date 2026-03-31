@@ -1,0 +1,16 @@
+{
+  "name": "Zettel-Workbench",
+  "short_name": "Zettel",
+  "description": "Mobile Erfassung für Obsidian Zettelkasten",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#111110",
+  "theme_color": "#c4b48e",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/564/564445.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
