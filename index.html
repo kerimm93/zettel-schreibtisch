@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Zettel-Workbench v8.3 (Final Sync)</title>
-    <link rel="manifest" href="manifest.json">
+    <title>Zettel-Workbench v8.4 (Loop Fix)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         :root {
@@ -13,32 +12,30 @@
             --mono: 'JetBrains Mono', monospace;
             --safe: #4e8c4e; --danger: #9e5a52;
         }
-        body { font-family: 'Lora', serif; background: var(--bg); color: var(--ink); padding: 15px; line-height: 1.6; padding-bottom: 120px; margin: 0; }
+        body { font-family: 'Lora', serif; background: var(--bg); color: var(--ink); padding: 15px; margin: 0; padding-bottom: 120px; }
         .container { max-width: 1000px; margin: 0 auto; }
-        h1 { font-family: var(--mono); font-size: 1rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+        h1 { font-family: var(--mono); font-size: 1rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 10px; text-transform: uppercase; }
         .api-config { background: #1a1a15; border: 1px dashed var(--border); padding: 15px; border-radius: 8px; margin-bottom: 25px; }
         .config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 15px; }
         .zettel-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 30px; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.4); }
         .path-row { display: flex; gap: 10px; margin-bottom: 20px; background: #161614; padding: 15px; border-radius: 6px; border: 1px solid #222; }
         label { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; color: var(--ink-dim); display: block; margin-bottom: 5px; font-weight: bold; }
         input, textarea { width: 100%; background: #000; border: 1px solid var(--border); color: var(--ink); padding: 10px; border-radius: 4px; font-family: inherit; font-size: 0.92rem; box-sizing: border-box;}
-        .ai-btn { background: #2d2d2a; color: var(--accent); border: 1px solid var(--accent); padding: 8px 12px; font-size: 0.7rem; cursor: pointer; border-radius: 4px; font-family: var(--mono); transition: 0.2s; }
-        .ai-btn:hover { background: var(--accent); color: #000; }
+        .ai-btn { background: #2d2d2a; color: var(--accent); border: 1px solid var(--accent); padding: 8px 12px; font-size: 0.7rem; cursor: pointer; border-radius: 4px; font-family: var(--mono); }
         .btn-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 15px; border-top: 1px solid var(--border); padding-top: 15px; }
         .group { display: flex; gap: 8px; }
         .tree-preview { font-family: var(--mono); font-size: 0.72rem; color: var(--accent); margin-top: 12px; padding: 8px; background: #000; border-radius: 4px; border-left: 3px solid var(--accent); }
         .link-pill { cursor: pointer; background: var(--border); padding: 4px 10px; border-radius: 4px; margin-right: 8px; display: inline-block; margin-bottom: 8px; color: var(--accent); font-family: var(--mono); font-size: 0.75rem; border: 1px solid transparent;}
         .actions { position: sticky; bottom: 15px; display: flex; gap: 10px; background: rgba(17,17,16,0.95); padding: 15px; border-top: 1px solid var(--border); justify-content: center; backdrop-filter: blur(10px); z-index: 100; border-radius: 12px; }
-        button.primary { background: var(--accent); color: #000; border: none; padding: 12px 20px; border-radius: 5px; font-family: var(--mono); font-weight: bold; cursor: pointer; font-size: 0.85rem;}
+        button.primary { background: var(--accent); color: #000; border: none; padding: 12px 20px; border-radius: 5px; font-family: var(--mono); font-weight: bold; cursor: pointer; }
         .delete-btn { color: var(--danger); background: none; font-size: 0.65rem; border: none; cursor: pointer; position: absolute; top: 12px; right: 12px; font-family: var(--mono); opacity: 0.6;}
         .save-status { position: absolute; top: 12px; right: 80px; font-family: var(--mono); font-size: 0.6rem; color: var(--safe); opacity: 0.8; }
-        input[type="file"] { display: none; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>Zettel-Workbench v8.3</h1>
+    <h1>Zettel-Workbench v8.4</h1>
     <div class="api-config">
         <div class="config-grid">
             <div><label>OpenAI Key</label><input type="password" id="apiKey" onchange="saveConfig()"></div>
@@ -57,12 +54,12 @@
     <div id="workbench"></div>
     <div class="actions">
         <button class="primary" onclick="addZettel()">+ Neuer Zettel</button>
-        <button style="background:none; border:1px solid var(--accent); color:var(--accent); padding:12px 20px; border-radius:5px; cursor:pointer; font-family: var(--mono); font-size: 0.85rem;" onclick="exportZip()">📦 ZIP Export</button>
+        <button style="background:none; border:1px solid var(--accent); color:var(--accent); padding:12px 20px; border-radius:5px; cursor:pointer; font-family: var(--mono);" onclick="exportZip()">📦 ZIP Export</button>
     </div>
 </div>
 
 <script>
-if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js'); }
+let isMerging = false;
 
 function saveConfig() {
     localStorage.setItem('zw_config', JSON.stringify({
@@ -82,7 +79,7 @@ function loadConfig() {
 }
 
 function addZettel() {
-    const id = Date.now();
+    const id = Date.now() + Math.floor(Math.random() * 1000);
     const card = document.createElement('div');
     card.className = 'zettel-card';
     card.id = `card-${id}`;
@@ -112,10 +109,7 @@ function addZettel() {
 }
 
 function removeCard(id) {
-    if(confirm("Diesen Zettel wirklich löschen?")) {
-        document.getElementById(`card-${id}`).remove();
-        updateAll(); autoSaveLocal();
-    }
+    if(confirm("Löschen?")) { document.getElementById(`card-${id}`).remove(); updateAll(); autoSaveLocal(); }
 }
 
 function update(id) {
@@ -126,9 +120,10 @@ function update(id) {
     const card = document.getElementById(`card-${id}`);
     if(!card) return;
     card.setAttribute('data-filename', fn.toLowerCase());
-    document.getElementById(`preview-${id}`).innerText = `Baum: ${t ? k + ' - ' + t : k}`;
-    updateAll(); autoSaveLocal();
-    document.getElementById(`status-${id}`).innerText = "Lokal gesichert";
+    document.getElementById(`preview-${id}`).innerText = `Pfad: ${fn}`;
+    
+    updateAll(); 
+    if(!isMerging) autoSaveLocal();
 }
 
 function updateAll() {
@@ -137,7 +132,7 @@ function updateAll() {
         const cId = card.id.replace('card-', '');
         const pills = document.getElementById(`pills-${cId}`);
         if(!pills) return;
-        pills.innerHTML = "<label>Link:</label>";
+        pills.innerHTML = "<label>Link-Vorschläge:</label>";
         cards.forEach(other => {
             const oId = other.id.replace('card-', '');
             if(cId === oId) return;
@@ -157,12 +152,12 @@ function collectData() {
     return Array.from(document.querySelectorAll('.zettel-card')).map(card => {
         const id = card.id.replace('card-', '');
         return {
-            p: document.getElementById(`parent-${id}`).value,
-            k: document.getElementById(`kürzel-${id}`).value,
-            t: document.getElementById(`title-${id}`).value,
-            q: document.getElementById(`quote-${id}`).value,
-            n: document.getElementById(`note-${id}`).value,
-            s: document.getElementById(`summary-${id}`).value
+            p: document.getElementById(`parent-${id}`).value.trim(),
+            k: document.getElementById(`kürzel-${id}`).value.trim(),
+            t: document.getElementById(`title-${id}`).value.trim(),
+            q: document.getElementById(`quote-${id}`).value.trim(),
+            n: document.getElementById(`note-${id}`).value.trim(),
+            s: document.getElementById(`summary-${id}`).value.trim()
         };
     });
 }
@@ -182,8 +177,9 @@ function renderCard(d) {
     let targetId;
     if (allCards.length === 1) {
         const firstId = allCards[0].id.replace('card-', '');
-        const isBlank = !document.getElementById(`parent-${firstId}`).value && !document.getElementById(`kürzel-${firstId}`).value && !document.getElementById(`quote-${firstId}`).value;
-        if (isBlank) targetId = firstId;
+        if (!document.getElementById(`parent-${firstId}`).value && !document.getElementById(`kürzel-${firstId}`).value && !document.getElementById(`quote-${firstId}`).value) {
+            targetId = firstId;
+        }
     }
     if (!targetId) targetId = addZettel();
     document.getElementById(`parent-${targetId}`).value = d.p || d.parent || "";
@@ -196,60 +192,71 @@ function renderCard(d) {
 }
 
 async function mergeFromGist() {
+    isMerging = true;
     const token = document.getElementById('githubToken').value.trim();
     const gistId = document.getElementById('gistId').value.trim();
-    if (!token || !gistId) return alert("GitHub Daten fehlen!");
+    if (!token || !gistId) { isMerging = false; return alert("Daten fehlen!"); }
     try {
         const res = await fetch(`https://api.github.com/gists/${gistId}`, { headers: { 'Authorization': `token ${token}` } });
         const data = await res.json();
         const remote = JSON.parse(data.files["zettel_sync.json"].content);
         
-        const localCards = {};
+        const localDataMap = {};
         document.querySelectorAll('.zettel-card').forEach(card => {
-            localCards[card.getAttribute('data-filename')] = card.id.replace('card-', '');
+            const id = card.id.replace('card-', '');
+            const path = card.getAttribute('data-filename');
+            localDataMap[path] = {
+                id: id,
+                q: document.getElementById(`quote-${id}`).value.trim(),
+                t: document.getElementById(`title-${id}`).value.trim(),
+                n: document.getElementById(`note-${id}`).value.trim(),
+                s: document.getElementById(`summary-${id}`).value.trim()
+            };
         });
 
-        let added = 0, updated = 0;
         remote.forEach(c => {
-            const path = (c.parent ? `${c.parent}.${c.kuerzel}` : c.kuerzel).toLowerCase();
-            
-            if (localCards[path]) {
-                const id = localCards[path];
-                const clean = (val) => (val || "").toString().trim();
-                
-                const isIdentical = 
-                    clean(document.getElementById(`quote-${id}`).value) === clean(c.q || c.quote) &&
-                    clean(document.getElementById(`title-${id}`).value) === clean(c.t || c.title) &&
-                    clean(document.getElementById(`note-${id}`).value) === clean(c.n || c.note) &&
-                    clean(document.getElementById(`summary-${id}`).value) === clean(c.s || c.summary);
+            const rPath = (c.p || c.parent ? `${c.p || c.parent}.${c.k || c.kuerzel}` : (c.k || c.kuerzel)).toLowerCase();
+            const rQ = (c.q || c.quote || "").trim();
+            const rT = (c.t || c.title || "").trim();
+            const rN = (c.n || c.note || "").trim();
+            const rS = (c.s || c.summary || "").trim();
 
+            if (localDataMap[rPath]) {
+                const l = localDataMap[rPath];
+                const isIdentical = (l.q === rQ && l.t === rT && l.n === rN && l.s === rS);
                 if (!isIdentical) {
-                    if (clean(document.getElementById(`quote-${id}`).value) === "") {
-                        renderCard(c); updated++;
+                    if (l.q === "" && l.t === "") {
+                        renderCard(c); // Befüllen falls lokal leer
                     } else {
-                        const copy = {...c}; copy.k = (c.k || c.kuerzel) + "_diff"; renderCard(copy); added++;
+                        const copy = {...c}; 
+                        copy.k = (c.k || c.kuerzel) + "_conflict"; 
+                        renderCard(copy);
                     }
                 }
-            } else { renderCard(c); added++; }
+            } else {
+                renderCard(c);
+            }
         });
-        alert(`🌿 Merge: ${added} neu/diff, ${updated} befüllt.`);
-    } catch (e) { alert("Merge Fehler"); }
+        alert("🌿 Merge abgeschlossen.");
+    } catch (e) { alert("Fehler"); }
+    isMerging = false;
+    autoSaveLocal();
 }
 
 async function saveToGist() {
     const token = document.getElementById('githubToken').value.trim();
     const gistId = document.getElementById('gistId').value.trim();
     try {
-        const res = await fetch(`https://api.github.com/gists/${gistId}`, {
+        await fetch(`https://api.github.com/gists/${gistId}`, {
             method: 'PATCH',
             headers: { 'Authorization': `token ${token}` },
             body: JSON.stringify({ files: { "zettel_sync.json": { content: JSON.stringify(collectData()) } } })
         });
-        if (res.ok) alert("✅ Cloud OK!");
+        alert("✅ Gespeichert!");
     } catch (e) { alert("Fehler"); }
 }
 
-function confirmLoadFromGist() { if(confirm("Überschreibt ALLES lokal. Fortfahren?")) loadFromGist(); }
+function confirmLoadFromGist() { if(confirm("Überschreibt ALLES lokal. Wirklich?")) loadFromGist(); }
 async function loadFromGist() {
     const token = document.getElementById('githubToken').value.trim();
     const gistId = document.getElementById('gistId').value.trim();
@@ -265,12 +272,12 @@ async function loadFromGist() {
 async function runAI(id) {
     const key = document.getElementById('apiKey').value.trim();
     const text = document.getElementById(`quote-${id}`).value;
-    if(!key || !text) return alert("Key/Inhalt fehlt!");
+    if(!key || !text) return alert("Key/Text fehlt!");
     try {
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-            body: JSON.stringify({ model: "gpt-4o-mini", messages: [{role: "system", content: "NUR JSON: {\"k\":\"Kürzel\",\"t\":\"Titel\",\"s\":\"Zusammenfassung\"}"}, {role: "user", content: text}] })
+            body: JSON.stringify({ model: "gpt-4o-mini", messages: [{role: "system", content: "Antworte NUR JSON: {\"k\":\"Kürzel\",\"t\":\"Titel\",\"s\":\"Zusammenfassung\"}"}, {role: "user", content: text}] })
         });
         const data = await response.json();
         const res = JSON.parse(data.choices[0].message.content);
@@ -290,10 +297,10 @@ async function exportZip() {
         if(!fn) return;
         const t = document.getElementById(`title-${id}`).value || "Unbenannt";
         const content = `---\ntitle: "${t}"\ntype: zettel\n---\n# ${t}\n\n> [!abstract] Zusammenfassung\n> ${document.getElementById(`summary-${id}`).value}\n\n## 📝 Anmerkung\n${document.getElementById(`note-${id}`).value}\n\n## 📖 Quelle\n${document.getElementById(`quote-${id}`).value}`;
-        zip.file(`${fn}.md`, content);
+    zip.file(`${fn}.md`, content);
     });
     const blob = await zip.generateAsync({type:"blob"});
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Zettel_Export_${new Date().toISOString().slice(0,10)}.zip`; a.click();
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Export.zip`; a.click();
 }
 
 loadConfig(); loadLocal();
